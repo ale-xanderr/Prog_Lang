@@ -1,0 +1,1014 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Luxio — Lexical Analyzer</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:ital,wght@0,400;0,700;1,400&family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet" />
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.5/babel.min.js"></script>
+
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg-deep: #060811;
+    --bg-surface: rgba(13, 17, 35, 0.85);
+    --bg-glass: rgba(255,255,255,0.04);
+    --bg-glass-hover: rgba(255,255,255,0.07);
+    --border-glass: rgba(255,255,255,0.08);
+    --border-glow: rgba(100,160,255,0.25);
+
+    --accent-primary: #4e9eff;
+    --accent-cyan: #00d4ff;
+    --accent-purple: #a78bfa;
+    --accent-amber: #f59e0b;
+    --accent-emerald: #10b981;
+    --accent-rose: #f43f5e;
+    --accent-teal: #2dd4bf;
+    --accent-orange: #f97316;
+    --accent-lime: #84cc16;
+
+    --text-primary: #e8eaf6;
+    --text-secondary: rgba(232,234,246,0.6);
+    --text-muted: rgba(232,234,246,0.35);
+
+    --token-keyword: #c084fc;
+    --token-identifier: #60a5fa;
+    --token-int: #34d399;
+    --token-float: #6ee7b7;
+    --token-string: #fbbf24;
+    --token-char: #f59e0b;
+    --token-boolean: #fb923c;
+    --token-null: #f87171;
+    --token-operator: #67e8f9;
+    --token-delimiter: #94a3b8;
+    --token-comment: #64748b;
+    --token-preprocessor: #e879f9;
+    --token-directive: #d946ef;
+    --token-header: #818cf8;
+    --token-invalid: #ef4444;
+
+    --font-display: 'Syne', sans-serif;
+    --font-mono: 'Space Mono', monospace;
+  }
+
+  html, body { height: 100%; }
+
+  body {
+    font-family: var(--font-display);
+    background: var(--bg-deep);
+    color: var(--text-primary);
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* Animated grid background */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image:
+      linear-gradient(rgba(78,158,255,0.04) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(78,158,255,0.04) 1px, transparent 1px);
+    background-size: 40px 40px;
+    z-index: 0;
+    pointer-events: none;
+  }
+
+  /* Radial glow orbs */
+  body::after {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background:
+      radial-gradient(ellipse 800px 600px at 20% 10%, rgba(78,100,255,0.07) 0%, transparent 60%),
+      radial-gradient(ellipse 600px 500px at 80% 80%, rgba(160,78,255,0.06) 0%, transparent 60%);
+    z-index: 0;
+    pointer-events: none;
+  }
+
+  #root { position: relative; z-index: 1; min-height: 100vh; }
+
+  /* Glass card */
+  .glass {
+    background: var(--bg-surface);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border: 1px solid var(--border-glass);
+    border-radius: 16px;
+  }
+
+  .glass-inner {
+    background: var(--bg-glass);
+    border: 1px solid var(--border-glass);
+    border-radius: 12px;
+  }
+
+  /* Scrollbar */
+  ::-webkit-scrollbar { width: 4px; height: 4px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: rgba(78,158,255,0.3); border-radius: 4px; }
+
+  /* Editor */
+  .editor-area {
+    width: 100%;
+    min-height: 220px;
+    font-family: var(--font-mono);
+    font-size: 13px;
+    line-height: 1.7;
+    background: transparent;
+    border: none;
+    outline: none;
+    resize: vertical;
+    color: var(--text-primary);
+    caret-color: var(--accent-primary);
+    padding: 1rem;
+    tab-size: 2;
+  }
+
+  .editor-area::placeholder { color: var(--text-muted); }
+
+  /* Token chips */
+  .chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 2px 8px;
+    border-radius: 6px;
+    font-family: var(--font-mono);
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+    white-space: nowrap;
+  }
+
+  /* Analyze button */
+  .btn-analyze {
+    font-family: var(--font-display);
+    font-weight: 700;
+    font-size: 14px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    background: linear-gradient(135deg, rgba(78,158,255,0.2), rgba(167,139,250,0.2));
+    border: 1px solid rgba(78,158,255,0.4);
+    color: var(--accent-primary);
+    padding: 10px 28px;
+    border-radius: 10px;
+    cursor: pointer;
+    transition: all 0.2s;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .btn-analyze::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(135deg, rgba(78,158,255,0.1), rgba(167,139,250,0.1));
+    opacity: 0;
+    transition: opacity 0.2s;
+  }
+
+  .btn-analyze:hover::before { opacity: 1; }
+  .btn-analyze:hover { border-color: var(--accent-primary); box-shadow: 0 0 20px rgba(78,158,255,0.2); }
+  .btn-analyze:active { transform: scale(0.98); }
+  .btn-analyze:disabled { opacity: 0.5; cursor: not-allowed; }
+
+  .btn-clear {
+    font-family: var(--font-display);
+    font-size: 13px;
+    background: transparent;
+    border: 1px solid var(--border-glass);
+    color: var(--text-secondary);
+    padding: 10px 18px;
+    border-radius: 10px;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+  .btn-clear:hover { border-color: rgba(255,255,255,0.2); color: var(--text-primary); }
+
+  /* Table */
+  .token-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+
+  .token-table th {
+    font-family: var(--font-display);
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    padding: 10px 14px;
+    text-align: left;
+    border-bottom: 1px solid var(--border-glass);
+    position: sticky;
+    top: 0;
+    background: rgba(6,8,17,0.9);
+    backdrop-filter: blur(10px);
+    z-index: 2;
+  }
+
+  .token-table td {
+    padding: 9px 14px;
+    border-bottom: 1px solid rgba(255,255,255,0.03);
+    font-family: var(--font-mono);
+    font-size: 12px;
+    vertical-align: middle;
+  }
+
+  .token-table tr:hover td { background: rgba(78,158,255,0.04); }
+  .token-table tr.error-row td { background: rgba(239,68,68,0.06); }
+  .token-table tr.error-row:hover td { background: rgba(239,68,68,0.1); }
+
+  .line-num {
+    color: var(--text-muted);
+    font-size: 11px;
+    min-width: 28px;
+    text-align: center;
+    background: rgba(255,255,255,0.04);
+    border-radius: 4px;
+    padding: 2px 6px;
+  }
+
+  .lexeme {
+    font-family: var(--font-mono);
+    color: var(--text-primary);
+    max-width: 200px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  /* Token span tooltip */
+  .token-span {
+    position: relative;
+    cursor: help;
+    border-radius: 3px;
+    padding: 1px 3px;
+    transition: all 0.15s;
+  }
+
+  .token-span:hover { filter: brightness(1.3); }
+
+  .token-span .tooltip {
+    display: none;
+    position: absolute;
+    bottom: calc(100% + 6px);
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(10,14,30,0.97);
+    border: 1px solid var(--border-glass);
+    border-radius: 8px;
+    padding: 6px 10px;
+    white-space: nowrap;
+    z-index: 100;
+    pointer-events: none;
+    backdrop-filter: blur(10px);
+    box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+  }
+
+  .token-span .tooltip .tt-type {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    margin-bottom: 2px;
+  }
+
+  .token-span .tooltip .tt-desc {
+    font-family: var(--font-display);
+    font-size: 11px;
+    color: var(--text-secondary);
+  }
+
+  .token-span .tooltip::after {
+    content: '';
+    position: absolute;
+    top: 100%;
+    left: 50%;
+    transform: translateX(-50%);
+    border: 5px solid transparent;
+    border-top-color: var(--border-glass);
+  }
+
+  .token-span:hover .tooltip { display: block; }
+
+  /* Alert */
+  .alert-error {
+    background: rgba(239,68,68,0.1);
+    border: 1px solid rgba(239,68,68,0.3);
+    border-radius: 10px;
+    padding: 12px 16px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    animation: slideIn 0.3s ease;
+  }
+
+  @keyframes slideIn {
+    from { opacity: 0; transform: translateY(-8px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  /* Stats bar */
+  .stat-pill {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 12px;
+    border-radius: 20px;
+    background: var(--bg-glass);
+    border: 1px solid var(--border-glass);
+    font-size: 12px;
+    font-family: var(--font-mono);
+  }
+
+  .stat-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+
+  /* Pulse animation */
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.5; }
+  }
+
+  .analyzing { animation: pulse 1s infinite; }
+
+  /* Code render area */
+  .code-render {
+    font-family: var(--font-mono);
+    font-size: 13px;
+    line-height: 1.8;
+    padding: 1rem;
+    white-space: pre-wrap;
+    word-break: break-all;
+  }
+
+  .code-render .nl {
+    display: block;
+    height: 0;
+  }
+
+  /* Line numbers for editor */
+  .editor-wrapper {
+    display: flex;
+    min-height: 220px;
+  }
+
+  .line-numbers {
+    font-family: var(--font-mono);
+    font-size: 13px;
+    line-height: 1.7;
+    color: var(--text-muted);
+    text-align: right;
+    padding: 1rem 8px 1rem 1rem;
+    user-select: none;
+    min-width: 40px;
+    border-right: 1px solid var(--border-glass);
+    counter-reset: line;
+  }
+
+  .line-numbers span { display: block; font-size: 11px; }
+
+  /* Section labels */
+  .section-label {
+    font-family: var(--font-display);
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    margin-bottom: 10px;
+  }
+
+  /* Logo glow */
+  .logo-glow {
+    text-shadow: 0 0 30px rgba(78,158,255,0.5), 0 0 60px rgba(78,158,255,0.2);
+  }
+
+  /* Tab bar */
+  .tab-bar { display: flex; gap: 4px; }
+
+  .tab-btn {
+    font-family: var(--font-display);
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 0.05em;
+    padding: 6px 14px;
+    border-radius: 8px;
+    border: 1px solid transparent;
+    background: transparent;
+    color: var(--text-muted);
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+
+  .tab-btn.active {
+    background: rgba(78,158,255,0.1);
+    border-color: rgba(78,158,255,0.2);
+    color: var(--accent-primary);
+  }
+
+  .tab-btn:not(.active):hover {
+    background: var(--bg-glass);
+    color: var(--text-secondary);
+  }
+
+  /* Scrollable table container */
+  .table-scroll {
+    overflow-y: auto;
+    max-height: 380px;
+  }
+
+  /* Empty state */
+  .empty-state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 48px 24px;
+    gap: 12px;
+    color: var(--text-muted);
+  }
+
+  .empty-icon {
+    width: 48px;
+    height: 48px;
+    border-radius: 12px;
+    background: var(--bg-glass);
+    border: 1px solid var(--border-glass);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 22px;
+  }
+
+  /* Filter select */
+  .filter-select {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    background: var(--bg-glass);
+    border: 1px solid var(--border-glass);
+    color: var(--text-secondary);
+    padding: 5px 10px;
+    border-radius: 8px;
+    outline: none;
+    cursor: pointer;
+  }
+
+  .filter-select option { background: #0d1123; }
+
+  /* Sample code buttons */
+  .sample-btn {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    padding: 4px 10px;
+    border-radius: 6px;
+    border: 1px solid var(--border-glass);
+    background: transparent;
+    color: var(--text-muted);
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+  .sample-btn:hover { border-color: rgba(78,158,255,0.3); color: var(--accent-primary); }
+
+  /* Highlight search */
+  .search-input {
+    font-family: var(--font-mono);
+    font-size: 12px;
+    background: var(--bg-glass);
+    border: 1px solid var(--border-glass);
+    color: var(--text-primary);
+    padding: 5px 10px;
+    border-radius: 8px;
+    outline: none;
+    width: 160px;
+    transition: border-color 0.15s;
+  }
+  .search-input:focus { border-color: rgba(78,158,255,0.4); }
+  .search-input::placeholder { color: var(--text-muted); }
+
+  /* Loading spinner */
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .spinner {
+    width: 16px; height: 16px;
+    border: 2px solid rgba(78,158,255,0.2);
+    border-top-color: var(--accent-primary);
+    border-radius: 50%;
+    animation: spin 0.7s linear infinite;
+  }
+
+  /* Fade-in for table rows */
+  @keyframes fadeInRow {
+    from { opacity: 0; transform: translateX(-6px); }
+    to { opacity: 1; transform: translateX(0); }
+  }
+  .token-row { animation: fadeInRow 0.2s ease both; }
+</style>
+</head>
+<body>
+<div id="root"></div>
+
+<script type="text/babel">
+const { useState, useRef, useCallback, useMemo } = React;
+
+const BACKEND_URL = "http://localhost:8765";
+
+const TOKEN_COLORS = {
+  KEYWORD: { color: '#c084fc', bg: 'rgba(192,132,252,0.12)', label: 'KW' },
+  IDENTIFIER: { color: '#60a5fa', bg: 'rgba(96,165,250,0.12)', label: 'ID' },
+  INT_LITERAL: { color: '#34d399', bg: 'rgba(52,211,153,0.12)', label: 'INT' },
+  FLOAT_LITERAL: { color: '#6ee7b7', bg: 'rgba(110,231,183,0.12)', label: 'FLT' },
+  STRING_LITERAL: { color: '#fbbf24', bg: 'rgba(251,191,36,0.12)', label: 'STR' },
+  CHAR_LITERAL: { color: '#f59e0b', bg: 'rgba(245,158,11,0.12)', label: 'CHR' },
+  BOOLEAN: { color: '#fb923c', bg: 'rgba(251,146,60,0.12)', label: 'BOOL' },
+  NULL_LITERAL: { color: '#f87171', bg: 'rgba(248,113,113,0.12)', label: 'NULL' },
+  OPERATOR: { color: '#67e8f9', bg: 'rgba(103,232,249,0.12)', label: 'OP' },
+  DELIMITER: { color: '#94a3b8', bg: 'rgba(148,163,184,0.12)', label: 'DLM' },
+  COMMENT: { color: '#475569', bg: 'rgba(71,85,105,0.12)', label: 'CMT' },
+  PREPROCESSOR: { color: '#e879f9', bg: 'rgba(232,121,249,0.12)', label: 'PRE' },
+  DIRECTIVE: { color: '#d946ef', bg: 'rgba(217,70,239,0.12)', label: 'DIR' },
+  HEADER: { color: '#818cf8', bg: 'rgba(129,140,248,0.12)', label: 'HDR' },
+  INVALID_TOKEN: { color: '#ef4444', bg: 'rgba(239,68,68,0.15)', label: 'ERR' },
+};
+
+const SAMPLES = {
+  'C Hello': `#include <stdio.h>
+
+int main() {
+    printf("Hello, World!\\n");
+    return 0;
+}`,
+  'Fibonacci': `int fibonacci(int n) {
+    if (n <= 1) return n;
+    return fibonacci(n - 1) + fibonacci(n - 2);
+}
+
+int main() {
+    int result = fibonacci(10);
+    float pi = 3.14159;
+    bool flag = true;
+    // Print result
+    printf("%d\\n", result);
+    char c = 'A';
+    return 0;
+}`,
+  'With Errors': `int main() {
+    int x = 5;
+    float y = 3.14;
+    char bad = @invalid;
+    string name = "hello";
+    x = x + y;
+    return 0;
+}`,
+};
+
+function TokenChip({ type, size = 'sm' }) {
+  const info = TOKEN_COLORS[type] || { color: '#94a3b8', bg: 'rgba(148,163,184,0.12)', label: '??' };
+  return (
+    <span className="chip" style={{
+      color: info.color,
+      background: info.bg,
+      border: `1px solid ${info.color}22`,
+      fontSize: size === 'sm' ? '10px' : '11px',
+    }}>
+      <span style={{
+        width: 5, height: 5, borderRadius: '50%',
+        background: info.color, display: 'inline-block', flexShrink: 0
+      }} />
+      {type}
+    </span>
+  );
+}
+
+function TokenSpan({ token }) {
+  const info = TOKEN_COLORS[token.type] || { color: '#94a3b8', bg: 'rgba(148,163,184,0.12)' };
+  const isNewline = token.token === '\n';
+  if (isNewline) return <br />;
+  return (
+    <span className="token-span" style={{ color: info.color, background: info.bg, borderRadius: 3 }}>
+      {token.token}
+      <span className="tooltip">
+        <div className="tt-type" style={{ color: info.color }}>{token.type}</div>
+        <div className="tt-desc">{token.description}</div>
+      </span>
+    </span>
+  );
+}
+
+function CodeRenderer({ code, tokens }) {
+  if (!tokens || tokens.length === 0) {
+    return (
+      <div className="code-render" style={{ color: 'var(--text-muted)' }}>
+        Analyze code to see highlighted output...
+      </div>
+    );
+  }
+
+  const segments = [];
+  let lastIdx = 0;
+
+  tokens.forEach((tok, i) => {
+    const idx = code.indexOf(tok.token, lastIdx);
+    if (idx === -1) return;
+    if (idx > lastIdx) {
+      const between = code.slice(lastIdx, idx);
+      segments.push(<span key={`ws-${i}`} style={{ color: 'var(--text-secondary)' }}>{between}</span>);
+    }
+    segments.push(<TokenSpan key={`tok-${i}`} token={tok} />);
+    lastIdx = idx + tok.token.length;
+  });
+
+  if (lastIdx < code.length) {
+    segments.push(<span key="tail" style={{ color: 'var(--text-secondary)' }}>{code.slice(lastIdx)}</span>);
+  }
+
+  return <div className="code-render">{segments}</div>;
+}
+
+function App() {
+  const [code, setCode] = useState(SAMPLES['Fibonacci']);
+  const [tokens, setTokens] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [hasErrors, setHasErrors] = useState(false);
+  const [analyzed, setAnalyzed] = useState(false);
+  const [activeTab, setActiveTab] = useState('table');
+  const [filter, setFilter] = useState('ALL');
+  const [search, setSearch] = useState('');
+  const [backendError, setBackendError] = useState(null);
+  const textareaRef = useRef(null);
+
+  const lineCount = code.split('\n').length;
+
+  const analyze = useCallback(async () => {
+    if (!code.trim()) return;
+    setLoading(true);
+    setBackendError(null);
+    try {
+      const resp = await fetch(`${BACKEND_URL}/analyze`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ code }),
+      });
+      if (!resp.ok) throw new Error(`Server error: ${resp.status}`);
+      const data = await resp.json();
+      setTokens(data.tokens);
+      setHasErrors(data.has_errors);
+      setAnalyzed(true);
+    } catch (e) {
+      setBackendError(e.message.includes('Failed to fetch')
+        ? 'Cannot reach backend. Start FastAPI: cd backend && uvicorn main:app --port 8765'
+        : e.message
+      );
+    } finally {
+      setLoading(false);
+    }
+  }, [code]);
+
+  const filteredTokens = useMemo(() => {
+    let t = tokens;
+    if (filter !== 'ALL') t = t.filter(x => x.type === filter);
+    if (search) t = t.filter(x =>
+      x.token.toLowerCase().includes(search.toLowerCase()) ||
+      x.type.toLowerCase().includes(search.toLowerCase())
+    );
+    return t;
+  }, [tokens, filter, search]);
+
+  const tokenTypes = useMemo(() => ['ALL', ...new Set(tokens.map(t => t.type))], [tokens]);
+
+  const stats = useMemo(() => {
+    const counts = {};
+    tokens.forEach(t => { counts[t.type] = (counts[t.type] || 0) + 1; });
+    return counts;
+  }, [tokens]);
+
+  const handleKeyDown = (e) => {
+    if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') { e.preventDefault(); analyze(); }
+    if (e.key === 'Tab') {
+      e.preventDefault();
+      const s = e.target.selectionStart, en = e.target.selectionEnd;
+      const nv = code.substring(0, s) + '  ' + code.substring(en);
+      setCode(nv);
+      setTimeout(() => { e.target.selectionStart = e.target.selectionEnd = s + 2; }, 0);
+    }
+  };
+
+  return (
+    <div style={{ maxWidth: 1200, margin: '0 auto', padding: '24px 20px 60px' }}>
+
+      {/* Header */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 32 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+          <div style={{
+            width: 44, height: 44, borderRadius: 12,
+            background: 'linear-gradient(135deg, rgba(78,158,255,0.3), rgba(167,139,250,0.3))',
+            border: '1px solid rgba(78,158,255,0.3)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            fontSize: 20
+          }}>⚡</div>
+          <div>
+            <h1 className="logo-glow" style={{
+              fontFamily: 'var(--font-display)', fontSize: 28, fontWeight: 800,
+              letterSpacing: '-0.02em', color: 'var(--accent-primary)',
+              lineHeight: 1
+            }}>LUXIO</h1>
+            <p style={{ fontSize: 11, color: 'var(--text-muted)', letterSpacing: '0.2em', fontWeight: 600 }}>
+              LEXICAL ANALYZER
+            </p>
+          </div>
+        </div>
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+          {Object.keys(SAMPLES).map(k => (
+            <button key={k} className="sample-btn" onClick={() => { setCode(SAMPLES[k]); setAnalyzed(false); setTokens([]); }}>
+              {k}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 16 }}>
+
+        {/* Editor Panel */}
+        <div className="glass" style={{ overflow: 'hidden' }}>
+          <div style={{
+            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+            padding: '12px 16px', borderBottom: '1px solid var(--border-glass)'
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <div style={{ display: 'flex', gap: 5 }}>
+                {['#ef4444','#f59e0b','#10b981'].map((c,i) => (
+                  <div key={i} style={{ width: 10, height: 10, borderRadius: '50%', background: c, opacity: 0.7 }} />
+                ))}
+              </div>
+              <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--text-muted)' }}>
+                source.c
+              </span>
+            </div>
+            <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--text-muted)' }}>
+              {lineCount} {lineCount === 1 ? 'line' : 'lines'}
+            </span>
+          </div>
+
+          <div className="editor-wrapper">
+            <div className="line-numbers">
+              {Array.from({ length: lineCount }, (_, i) => (
+                <span key={i}>{i + 1}</span>
+              ))}
+            </div>
+            <textarea
+              ref={textareaRef}
+              className="editor-area"
+              value={code}
+              onChange={e => { setCode(e.target.value); setAnalyzed(false); }}
+              onKeyDown={handleKeyDown}
+              placeholder="// Type or paste your code here...\n// Press Ctrl+Enter to analyze"
+              spellCheck={false}
+              autoCorrect="off"
+              autoCapitalize="off"
+            />
+          </div>
+
+          <div style={{
+            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+            padding: '10px 16px', borderTop: '1px solid var(--border-glass)'
+          }}>
+            <span style={{ fontSize: 11, color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>
+              Ctrl+Enter to analyze
+            </span>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button className="btn-clear" onClick={() => { setCode(''); setTokens([]); setAnalyzed(false); setHasErrors(false); }}>
+                Clear
+              </button>
+              <button className="btn-analyze" onClick={analyze} disabled={loading || !code.trim()}>
+                {loading ? (
+                  <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <span className="spinner" />
+                    Analyzing...
+                  </span>
+                ) : '⚡ Analyze'}
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {/* Stats Panel */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+
+          {/* Error alert */}
+          {hasErrors && (
+            <div className="alert-error">
+              <span style={{ fontSize: 18 }}>🔴</span>
+              <div>
+                <div style={{ fontWeight: 700, color: '#f87171', fontSize: 13, fontFamily: 'var(--font-display)' }}>
+                  Invalid Token Detected
+                </div>
+                <div style={{ fontSize: 12, color: 'rgba(248,113,113,0.8)', marginTop: 2 }}>
+                  One or more lexemes could not be recognized by the analyzer. Check INVALID_TOKEN rows below.
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Token type breakdown */}
+          <div className="glass" style={{ padding: 16, flex: 1 }}>
+            <div className="section-label">Token Distribution</div>
+            {!analyzed ? (
+              <div className="empty-state" style={{ padding: '24px 12px' }}>
+                <div className="empty-icon">📊</div>
+                <span style={{ fontSize: 12 }}>Run analysis to see token stats</span>
+              </div>
+            ) : (
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
+                {Object.entries(stats).map(([type, count]) => {
+                  const info = TOKEN_COLORS[type] || { color: '#94a3b8', bg: 'rgba(148,163,184,0.12)' };
+                  const pct = Math.round((count / tokens.length) * 100);
+                  return (
+                    <div key={type} style={{
+                      padding: '8px 10px',
+                      borderRadius: 8,
+                      background: info.bg,
+                      border: `1px solid ${info.color}22`,
+                      cursor: 'pointer',
+                    }} onClick={() => { setFilter(type); setActiveTab('table'); }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+                        <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: info.color, fontWeight: 700 }}>{type}</span>
+                        <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: info.color }}>{count}</span>
+                      </div>
+                      <div style={{ height: 3, borderRadius: 2, background: 'rgba(255,255,255,0.08)', overflow: 'hidden' }}>
+                        <div style={{ width: `${pct}%`, height: '100%', background: info.color, borderRadius: 2 }} />
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
+          {/* Summary pills */}
+          {analyzed && (
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+              <div className="stat-pill">
+                <div className="stat-dot" style={{ background: 'var(--accent-primary)' }} />
+                <span style={{ color: 'var(--text-secondary)' }}>{tokens.length} tokens</span>
+              </div>
+              {hasErrors && (
+                <div className="stat-pill">
+                  <div className="stat-dot" style={{ background: '#ef4444' }} />
+                  <span style={{ color: '#f87171' }}>{stats['INVALID_TOKEN'] || 0} errors</span>
+                </div>
+              )}
+              <div className="stat-pill">
+                <div className="stat-dot" style={{ background: 'var(--accent-purple)' }} />
+                <span style={{ color: 'var(--text-secondary)' }}>{Object.keys(stats).length} types</span>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Backend error */}
+      {backendError && (
+        <div className="alert-error" style={{ marginBottom: 16, flexDirection: 'column', alignItems: 'flex-start' }}>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+            <span>⚠️</span>
+            <span style={{ fontWeight: 700, color: '#f87171', fontSize: 13 }}>Backend Unreachable</span>
+          </div>
+          <code style={{ fontFamily: 'var(--font-mono)', fontSize: 12, color: 'rgba(248,113,113,0.8)', marginTop: 4 }}>
+            {backendError}
+          </code>
+        </div>
+      )}
+
+      {/* Results Panel */}
+      <div className="glass">
+        <div style={{
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+          padding: '12px 16px', borderBottom: '1px solid var(--border-glass)'
+        }}>
+          <div className="tab-bar">
+            <button className={`tab-btn ${activeTab === 'table' ? 'active' : ''}`} onClick={() => setActiveTab('table')}>
+              Token Table
+            </button>
+            <button className={`tab-btn ${activeTab === 'render' ? 'active' : ''}`} onClick={() => setActiveTab('render')}>
+              Visual Render
+            </button>
+          </div>
+          {activeTab === 'table' && analyzed && (
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+              <input
+                className="search-input"
+                placeholder="Search tokens..."
+                value={search}
+                onChange={e => setSearch(e.target.value)}
+              />
+              <select
+                className="filter-select"
+                value={filter}
+                onChange={e => setFilter(e.target.value)}
+              >
+                {tokenTypes.map(t => <option key={t} value={t}>{t}</option>)}
+              </select>
+            </div>
+          )}
+        </div>
+
+        {/* Table View */}
+        {activeTab === 'table' && (
+          <div className="table-scroll">
+            {!analyzed ? (
+              <div className="empty-state">
+                <div className="empty-icon">🔍</div>
+                <span style={{ fontSize: 13, fontFamily: 'var(--font-display)' }}>No analysis yet</span>
+                <span style={{ fontSize: 12 }}>Click Analyze or press Ctrl+Enter</span>
+              </div>
+            ) : filteredTokens.length === 0 ? (
+              <div className="empty-state">
+                <div className="empty-icon">🕳️</div>
+                <span style={{ fontSize: 12 }}>No tokens match your filter</span>
+              </div>
+            ) : (
+              <table className="token-table">
+                <thead>
+                  <tr>
+                    <th style={{ width: 60 }}>#</th>
+                    <th style={{ width: 70 }}>Line</th>
+                    <th>Lexeme</th>
+                    <th style={{ width: 200 }}>Token Type</th>
+                    <th>Description</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredTokens.map((tok, i) => (
+                    <tr key={i} className={`token-row ${tok.error ? 'error-row' : ''}`}
+                        style={{ animationDelay: `${Math.min(i * 0.02, 0.5)}s` }}>
+                      <td style={{ color: 'var(--text-muted)', fontSize: 11, fontFamily: 'var(--font-mono)' }}>
+                        {i + 1}
+                      </td>
+                      <td>
+                        <span className="line-num">{tok.line}</span>
+                      </td>
+                      <td>
+                        <span className="lexeme" title={tok.token}
+                          style={{ color: tok.error ? '#f87171' : 'var(--text-primary)' }}>
+                          {tok.token === ' ' ? '·' : tok.token}
+                        </span>
+                      </td>
+                      <td><TokenChip type={tok.type} /></td>
+                      <td style={{ color: 'var(--text-secondary)', fontSize: 12 }}>{tok.description}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </div>
+        )}
+
+        {/* Render View */}
+        {activeTab === 'render' && (
+          <div>
+            <div style={{ padding: '8px 16px', borderBottom: '1px solid var(--border-glass)', fontSize: 11, color: 'var(--text-muted)' }}>
+              Hover over any token to see its type and description
+            </div>
+            <div style={{ padding: '8px 0' }}>
+              <CodeRenderer code={code} tokens={analyzed ? tokens : []} />
+            </div>
+            {analyzed && (
+              <div style={{
+                padding: '10px 16px', borderTop: '1px solid var(--border-glass)',
+                display: 'flex', flexWrap: 'wrap', gap: 8
+              }}>
+                {Object.entries(TOKEN_COLORS).filter(([k]) => stats[k]).map(([type, info]) => (
+                  <span key={type} style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, color: info.color }}>
+                    <span style={{ width: 8, height: 8, borderRadius: 2, background: info.color, display: 'inline-block' }} />
+                    {type}
+                  </span>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* Footer */}
+      <div style={{
+        marginTop: 24, textAlign: 'center',
+        fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--text-muted)'
+      }}>
+        Luxio · Powered by GNU Flex + FastAPI + React
+        &nbsp;·&nbsp; Backend: <code style={{ color: 'var(--accent-primary)' }}>{BACKEND_URL}</code>
+      </div>
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+</script>
+</body>
+</html>
