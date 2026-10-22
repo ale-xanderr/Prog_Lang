@@ -107,8 +107,8 @@ Install [WSL2](https://learn.microsoft.com/en-us/windows/wsl/install) and follow
 ### 1. Clone the Repository
 
 ```bash
-git clone https://github.com/your-username/luxio.git
-cd luxio
+git clone https://github.com/ale-xanderr/Prog_Lang.git
+cd Prog_Lang
 ```
 
 ### 2. Compile the Flex Lexer
@@ -304,7 +304,7 @@ with open("tokens.json", "w") as f:
 ## Project Structure
 
 ```
-luxio/
+Prog_Lang/
 ├── README.md                  # This file
 ├── CODE_EXPLANATION.md        # Deep technical breakdown of every component
 ├── backend/
